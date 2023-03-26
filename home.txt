@@ -1,0 +1,171 @@
+from nicegui import ui
+from nicegui.events import MouseEventArguments
+import base64
+from PIL import Image
+import adbutils
+import scrcpy
+import io
+import cv2
+import threading
+import os
+from adbutils import AdbError
+import numpy as np
+
+
+adb = adbutils.AdbClient()
+
+device_list = [d.serial for d in adb.device_list()]
+client_list = []
+device_view = []
+sh_scripts = []
+custom_scripts = ["Install Youtube"]
+
+for x in os.listdir("./scripts"):
+    if x.endswith(".sh"):
+        sh_scripts.append(x.split(".")[0])
+
+scripts = custom_scripts + sh_scripts
+
+
+class DeviceView(ui.interactive_image):
+    def __init__(self, serial: str, bit_rate=1000, width=300) -> None:
+        super().__init__()
+        self.serial = serial
+        self.device = adb.device(serial)
+        with self:
+            self.content = f'<text x="0" y="15" fill="red">{serial}</text>'
+
+        self.source = ""
+        self.classes('border border-gray-900')
+
+        client = scrcpy.Client(device=serial, bitrate=bit_rate, max_fps=24,
+                               max_width=width, stay_awake=True, lock_screen_orientation=0)
+        client.start(threaded=True)
+        client.add_listener(scrcpy.EVENT_FRAME, self.on_frame)
+
+    def on_frame(self, frame):
+        if frame is not None:
+            _, im_arr = cv2.imencode('.jpeg', frame)
+            if im_arr is not None:
+                try:
+                    im_bytes = im_arr.tobytes()
+                    im_b64 = str(base64.b64encode(im_bytes), "utf-8")
+                    if(im_b64 is not None):
+                        self.source = "data:image/png;base64," + im_b64
+
+                except:
+                    print("err")
+
+
+if len(device_list) > 0:
+    with ui.row().style('display:grid; grid-auto-columns: 500px 1fr;'):
+        with ui.column().style('border: 1px solid black; padding: 16px; border-radius:5px; height:100%;grid-column:1'):
+            with ui.tabs().style('width:100%') as tabs:
+                ui.tab('Overview', icon='grade')
+                ui.tab('Detail', icon='info')
+
+            with ui.tab_panels(tabs, value='Overview'):
+                with ui.tab_panel('Overview'):
+                    ui.label(f"Connected device(s): {len(device_list)}").style(
+                        'font-size:24px;font-weight:600')
+                    with ui.row().style('align-items:center;width:100%'):
+                        select_script = ui.select(
+                            scripts, value=scripts[0])
+
+                        def thread_run(device, script):
+                            d = adb.device(serial=device)
+                            try:
+                                if(script in sh_scripts):
+                                    d.push(
+                                        f"./scripts/{script}.sh", "/data/local/tmp")
+                                    d.shell(
+                                        f"chmod 777 /data/local/tmp/{script}.sh")
+                                    d.shell(f"/data/local/tmp/{script}.sh")
+                                elif(script == "Install Youtube"):
+                                    print(f"Installing Youtube on {device}")
+                                    d.install("./apk/yt.apk")
+                                    print(f"Installed Youtube on {device}")
+                            except AdbError as e:
+                                print(e)
+
+                        def execute_script():
+
+                            for device in device_list:
+                                threading.Thread(target=thread_run, args=(
+                                    device, select_script.value,)).start()
+                        ui.button("Run",
+                                  on_click=execute_script)
+                    columns = [
+                        {'name': 'ID', 'label': 'ID', 'field': 'id'},
+                        {'name': 'Model', 'label': 'Model', 'field': 'model', },
+                        {'name': 'Device', 'label': 'Device', 'field': 'device', },
+                        {'name': 'Serial', 'label': 'Serial', 'field': 'serial', },
+
+
+                    ]
+                    rows = [
+                        {'id': i+1, 'model': adb.device(d).prop.model, 'device': adb.device(d).prop.device, 'serial': d} for i, d in enumerate(device_list)
+                    ]
+
+                    ui.table(columns=columns, rows=rows,
+                             row_key='serial')
+
+                with ui.tab_panel('Detail'):
+                    with ui.row().style('align-items:center;width:100%'):
+                        ui.label("Select device").style(
+                            'font-size:24px;font-weight:600')
+                        select_device = ui.select(
+                            device_list, value=device_list[0])
+                        with ui.dialog() as dialog, ui.card():
+                            with ui.column():
+                                ui.label(f'Device: {select_device.value}')
+
+                                def mouse_handler(e: MouseEventArguments):
+                                    color = 'SkyBlue'
+                                    ii.content += f'<circle cx="{e.image_x}" cy="{e.image_y}" r="5" fill="none" stroke="{color}" stroke-width="4" />'
+                                    ui.notify(
+                                        f'{int(e.image_x)}, {int(e.image_y)}')
+
+                                img = adb.device(device_list[0]).screenshot()
+                                img = np.array(img)
+                                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                                _, im_arr = cv2.imencode('.jpeg', img)
+                                im_bytes = im_arr.tobytes()
+                                im_b64 = str(
+                                    base64.b64encode(im_bytes), "utf-8")
+                                src = ''
+                                if(im_b64 is not None):
+                                    src = "data:image/png;base64," + im_b64
+
+                                ii = ui.interactive_image(src, on_mouse=mouse_handler, events=[
+                                    'mousedown'], cross=True)
+
+                        ui.button("Screenshot", on_click=dialog.open)
+                    DeviceView(select_device.value, 1000, 500)
+
+        with ui.column().style('grid-column:2') as container:
+
+            with ui.row():
+                ui.label('Quality')
+                select_quality = ui.select(
+                    ["Low", "Medium", "High"], value='Low', on_change=container.update)
+            with ui.row():
+                ui.label('Size')
+                select_size = ui.select(
+                    ["S", "M", "L"], value='S', on_change=container.update)
+            br = 10000
+            width = 300
+            if(select_quality.value == 'Medium'):
+                br = 100000
+            if(select_quality.value == "High"):
+                br = 1000000
+            if(select_size.value == "M"):
+                width = 500
+            if(select_size.value == "L"):
+                width = 1000
+            with ui.row().style(f'width:100%'):
+                [DeviceView(d, br, width) for d in device_list]
+else:
+    ui.label('No device found')
+
+ui.run()

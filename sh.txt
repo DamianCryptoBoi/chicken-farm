@@ -1,0 +1,67 @@
+adb shell am start -a android.intent.action.VIEW -d "https://youtube.com/shorts/GeRpdGHO7mc"
+
+// Open app with package name
+
+//// open facebook
+     adb shell monkey -p com.facebook.katana 1
+
+//// open youtube
+     adb shell monkey -p com.google.android.youtube 1
+
+
+/// input 
+== Key event
+adb shell input keyevent 3 // Home btn
+adb shell input keyevent 4 // Back btn
+adb shell input keyevent 5 // Call
+adb shell input keyevent 6 // End call
+adb shell input keyevent 26  // Turn Android device ON and OFF. It will toggle device to on/off status.
+adb shell input keyevent 27 // Camera
+adb shell input keyevent 64 // Open browser
+adb shell input keyevent 66 // Enter
+adb shell input keyevent 67 // Delete (backspace)
+adb shell input keyevent 207 // Contacts
+adb shell input keyevent 220 / 221 // Brightness down/up
+adb shell input keyevent 277 / 278 /279 // Cut/Copy/Paste
+
+#Simulate a touchscreen tap X,Y position.
+adb shell input tap <x> <y>
+
+#sends text as if typed at the keyboard
+adb shell input text "abcabc“
+
+#generates a swipe gesture from co-ordinates
+adb shell input swipe x1 y1 x2 y2  adb shell am start -a android.intent.action.VIEW -d "https://www.youtube.com/watch?v=fyMgBQioTLo&ab_channel=tlinh"
+
+// Open app with package name
+
+//// open facebook
+     adb shell monkey -p com.facebook.katana 1
+
+//// open youtube
+     adb shell monkey -p com.google.android.youtube 1
+
+
+/// input 
+== Key event
+adb shell input keyevent 3 // Home btn
+adb shell input keyevent 4 // Back btn
+adb shell input keyevent 5 // Call
+adb shell input keyevent 6 // End call
+adb shell input keyevent 26  // Turn Android device ON and OFF. It will toggle device to on/off status.
+adb shell input keyevent 27 // Camera
+adb shell input keyevent 64 // Open browser
+adb shell input keyevent 66 // Enter
+adb shell input keyevent 67 // Delete (backspace)
+adb shell input keyevent 207 // Contacts
+adb shell input keyevent 220 / 221 // Brightness down/up
+adb shell input keyevent 277 / 278 /279 // Cut/Copy/Paste
+
+#Simulate a touchscreen tap X,Y position.
+adb shell input tap <x> <y>
+
+#sends text as if typed at the keyboard
+adb shell input text "abcabc“
+
+#generates a swipe gesture from co-ordinates
+adb shell input swipe x1 y1 x2 y2  
