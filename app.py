@@ -34,33 +34,83 @@ scripts = custom_scripts + sh_scripts
 
 
 
-class DeviceView(ui.interactive_image):
-    def __init__(self, serial: str, bitrate=0, width=0, label=True) -> None:
-        super().__init__()
+class DeviceView():
+
+    def __init__(self,serial,bitrate=0,width=0,label=True,control=False,master=False,device_list=[]) -> None:
+
+
+        with ui.column():
+            if(label):
+                with ui.row().classes('items-center justify-between w-full'):
+                    ui.label(serial).style('font-size:10px')
+                    ui.link('See Detail',f'/device/{serial}').style('font-size:10px; text-decoration:none')
+            with ui.row():
+                if control == True:
+                    self.screen = ui.interactive_image(cross=False,events = ['mousedown', 'mouseup', "mousemove"],on_mouse= self.mouse_handler )
+                else:
+                    self.screen = ui.interactive_image()
+
+
         self.serial = serial
         self.device = adb.device(serial)
-
         self.bitrate = self.convert_quality(bitrate)
         self.width = self.convert_size(width)
+        self.control = control
+        self.master = master
+        self.device_list = device_list
 
-        if label:
-            with self:
-                self.content = f'<text x="0" y="15" fill="red">{serial}</text>'
+        # screen settings
 
-        self.img = self.device.screenshot()
+        self.screen.source = self.capture()
 
-        self.source = ""
-        self.classes('border border-gray-900')
+        self.client = scrcpy.Client(device=self.serial, bitrate=self.bitrate, max_fps=24,
+                               max_width=self.width, stay_awake=True, lock_screen_orientation=0)
+        self.client.start(threaded=True)
+        self.client.add_listener(scrcpy.EVENT_FRAME, self.on_frame)
 
-        self.start_client(self.bitrate,self.width)
+        self.master = master
+        self.device_list = device_list
 
-    def start_client(self,br,w):
-        client = scrcpy.Client(device=self.serial, bitrate=br, max_fps=24,
-                               max_width=w, stay_awake=True, lock_screen_orientation=0)
-        client.start(threaded=True)
-        client.add_listener(scrcpy.EVENT_FRAME, self.on_frame)
-        client_list.append(client)
+    def master_on(self, device_list):
+        self.master = True
+        self.device_list = device_list
 
+    def master_off(self):
+        self.master = False
+        self.device_list = []
+
+    def slave_work(self,master_width,master_x,master_y,master_action):
+        w,_ = self.client.resolution
+        ratio = w/master_width
+        self.client.control.touch(master_x*ratio,master_y*ratio,master_action)
+
+
+    def get_action(self,e):
+        if(e.type=="mousedown"):
+            return scrcpy.ACTION_DOWN
+        if(e.type == "mousemove"):
+            return scrcpy.ACTION_MOVE
+        if(e.type =="mouseup"):
+            return scrcpy.ACTION_UP
+
+    def mouse_handler(self,e: MouseEventArguments):
+        action = self.get_action(e)
+        self.client.control.touch(e.image_x, e.image_y, action)
+
+        if self.master == True:
+            w, _  = self.client.resolution
+            for slave in self.device_list:
+                threading.Thread(target=slave.slave_work, args=(w,e.image_x,e.image_y,action,)).start()
+
+    def enter_key(self,key):
+        self.device.keyevent(key)
+
+        if self.master == True:
+            for slave in self.device_list:
+                slave.enter_key(key)
+                
+                
+    
     def convert_size(self,size):
         if size ==1:
             return 480
@@ -91,7 +141,7 @@ class DeviceView(ui.interactive_image):
                 pass
         return
 
-    def capture(self,width =720): 
+    def capture(self,width =168): 
         img = self.device.screenshot()
         img = np.array(img)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -101,16 +151,15 @@ class DeviceView(ui.interactive_image):
         img = cv2.resize(img, (neww, newh))
 
         return self.to_base64(img)
-    
-    def get_ratio(self,width):
-        w, h  = self.device.window_size()
-        return width / w
 
 
     def on_frame(self, frame):
         if frame is not None:
-            self.source =  self.to_base64(frame)
+            self.screen.source =  self.to_base64(frame)
 
+    def get_ratio(self,width):
+            w, _  = self.device.window_size()
+            return width / w
     def execute(self,script):
         def run():
             try:
@@ -123,7 +172,6 @@ class DeviceView(ui.interactive_image):
             except AdbError as e:
                 pass
         threading.Thread(target=run, args=()).start()
-
     
 
 class AppManager:
@@ -154,8 +202,6 @@ def home():
             view.execute(select_script.value)
 
     async def reload():
-        for client in client_list():
-            client.stop()
         global device_list
         device_list= load_device_list()
         await ui.run_javascript('location.reload()', respond=False)
@@ -285,20 +331,32 @@ def page(serial: str):
         c.copy(gen_script)
         ui.notify('Script copied')
 
+    def toggle_master_mode(e):
+        if e.value == True:
+            view.master_on(device_views)
+        elif e.value == False:
+            view.master_off()
+            
+
 
         
     with ui.row().style('width:100%; display:flex'):
         with ui.column():
+            current_device=ui.select(device_list, value=serial,on_change=lambda:ui.open(f'/device/{current_device.value}')).classes('w-full')
             with ui.row().classes('items-center justify-between w-full'):
                 with ui.row().classes('items-center'):
-                    with ui.switch('Master device'):
-                        ui.tooltip('Every device will mimic this device')
+                    with ui.switch('Master mode',on_change=toggle_master_mode):
+                        ui.tooltip('Every other devices will follow this device')
 
                 with ui.button(on_click=screenshot).props('icon=screenshot') as screenshot_btn:
                     ui.tooltip('Screenshot')
                     
-
-            view = DeviceView(serial,3,2,False)
+            with ui.column():
+                view = DeviceView(serial,2,1,label=False,control=True)
+                with ui.row().classes("w-full justify-between"):
+                    ui.button(on_click=lambda:view.enter_key("BACK")).props('flat color=white icon=arrow_back_ios_new')
+                    ui.button(on_click=lambda:view.enter_key("HOME")).props('flat color=white icon=circle')
+                    ui.button(on_click=lambda:view.enter_key("187")).props('flat color=white icon=crop_din')
             with ui.dialog() as dialog, ui.card():
                 with ui.row():
                     with ui.column():
@@ -327,7 +385,7 @@ def page(serial: str):
                                 
                     
         with ui.row().style('flex:1'):
-            device_views = [DeviceView(d) for d in device_list]
+            device_views = [DeviceView(d,) for d in filter(lambda device: device != current_device.value,device_list)]
     
 
         
@@ -350,8 +408,5 @@ def page(serial: str):
 
 ui.run(title='Chicken Farm v0.0.1',favicon="icon.png",dark=True)
 
-# def on_close():
-#     for client in client_list():
-#         client.stop()
+adb.server_kill()
 
-# app.on_shutdown(on_close)
