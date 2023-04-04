@@ -14,9 +14,6 @@ import numpy as np
 import pyperclip as c
 
 
-
-ui.colors(primary='#2C3333')
-
 adb = adbutils.AdbClient()
 
 
@@ -393,13 +390,14 @@ def page(serial: str):
         dialog.open()
         
     with ui.header(elevated=True).classes('items-center justify-between').style('background-color:#2C3333'):
-        with ui.row().classes('items-center').style('gap:100px'):  
+        with ui.row().classes('items-center').style('gap:100px'):
+            
             with ui.row().classes('items-center justify-between'):
                 ui.button(on_click=lambda: ui.open('/')).props('flat color=white icon=arrow_back_ios_new')
                 ui.icon('smartphone').style('font-size:20px')
                 ui.label(f'Serial: {serial}').style('font-size:20px')
-                ui.label(f'Model: {view.device.prop.model}').style('font-size:20px')
-                ui.label(f'Device: {view.device.prop.device}').style('font-size:20px')
+                # ui.label(f'Model: {view.device.prop.model}').style('font-size:20px')
+                # ui.label(f'Device: {view.device.prop.device}').style('font-size:20px')
 
 
             
