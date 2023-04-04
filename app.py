@@ -406,7 +406,7 @@ def page(serial: str):
         
 
 
-ui.run(title='Chicken Farm v0.0.1',favicon="icon.png",dark=True)
+ui.run(title='Chicken Farm v0.0.1',favicon="icon.png",dark=True,reload=False,native=True)
 
 adb.server_kill()
 
