@@ -8,26 +8,49 @@ from adbutils import AdbError
 import numpy as np
 
 
+class Device():
+    def __init__(self,serial,manager) -> None:
+
+        self.serial = serial
+        self.manager = manager
+        self.device = manager.adb.device(serial)
+
+    def execute(self,script):
+        def run():
+            try:
+                if(script in self.manager.sh_scripts):
+                    self.device.push( f"./scripts/{script}.sh", "/data/local/tmp")
+                    self.device.shell(f"chmod 777 /data/local/tmp/{script}.sh")
+                    self.device.shell(f"/data/local/tmp/{script}.sh")
+                elif(script == "Install Youtube"):
+                    self.device.install("./apk/yt.apk")
+            except AdbError as e:
+                pass
+        threading.Thread(target=run, args=()).start()
 
 
-
-class DeviceView():
+class DeviceView(Device):
 
     def __init__(self,serial,bitrate=0,width=0,label=True,control=False,master=False,device_list=[],manager = None) -> None:
+        super().__init__(serial,manager)
+        self.is_focused = True if manager.focused_device == serial else False
+
         with ui.column():
+            if control == False:
+                ui.tooltip(f"Select device {serial}")
             if(label):
                 with ui.row().classes('items-center justify-between w-full'):
-                    ui.label(serial).style('font-size:10px')
-                    ui.link('See Detail',f'/device/{serial}').style('font-size:10px; text-decoration:none')
+                    ui.label(serial).style('font-size:14px')
+                        
             with ui.row():
                 if control == True:
                     self.screen = ui.interactive_image(cross=False,events = ['mousedown', 'mouseup', "mousemove"],on_mouse= self.mouse_handler )
                 else:
-                    self.screen = ui.interactive_image()
+                    self.screen = ui.interactive_image(cross=False,events = ['click'],on_mouse= self.click_handler)
 
-        self.manager = manager
-        self.serial = serial
-        self.device = manager.adb.device(serial)
+        # self.manager = manager
+        
+        
         self.bitrate = self.convert_quality(bitrate)
         self.width = self.convert_size(width)
         self.control = control
@@ -67,6 +90,11 @@ class DeviceView():
             return scrcpy.ACTION_MOVE
         if(e.type =="mouseup"):
             return scrcpy.ACTION_UP
+        
+    async def click_handler(self,e: MouseEventArguments):
+        if e.type == "click":
+            self.manager.focus_device(self.serial)
+            await ui.run_javascript('location.reload()', respond=False)
 
     def mouse_handler(self,e: MouseEventArguments):
         action = self.get_action(e)
@@ -75,14 +103,16 @@ class DeviceView():
         if self.master == True:
             w, _  = self.client.resolution
             for slave in self.device_list:
-                threading.Thread(target=slave.slave_work, args=(w,e.image_x,e.image_y,action,)).start()
+                if slave.serial != self.serial:
+                    threading.Thread(target=slave.slave_work, args=(w,e.image_x,e.image_y,action,)).start()
 
     def enter_key(self,key):
         self.device.keyevent(key)
 
         if self.master == True:
             for slave in self.device_list:
-                slave.enter_key(key)
+                if slave.serial != self.serial:
+                    slave.enter_key(key)
                 
                 
     
@@ -116,7 +146,7 @@ class DeviceView():
                 pass
         return
 
-    def capture(self,width =168): 
+    def capture(self,width =136): 
         img = self.device.screenshot()
         img = np.array(img)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -135,15 +165,3 @@ class DeviceView():
     def get_ratio(self,width):
             w, _  = self.device.window_size()
             return width / w
-    def execute(self,script):
-        def run():
-            try:
-                if(script in self.manager.sh_scripts):
-                    self.device.push( f"./scripts/{script}.sh", "/data/local/tmp")
-                    self.device.shell(f"chmod 777 /data/local/tmp/{script}.sh")
-                    self.device.shell(f"/data/local/tmp/{script}.sh")
-                elif(script == "Install Youtube"):
-                    self.device.install("./apk/yt.apk")
-            except AdbError as e:
-                pass
-        threading.Thread(target=run, args=()).start()

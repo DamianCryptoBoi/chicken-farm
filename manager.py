@@ -7,14 +7,14 @@ class AppManager:
 
         self.serials_list = [d.serial for d in self.adb.device_list()]
 
-        sh_scripts = []
-        custom_scripts = ["Install Youtube"]
+        self.sh_scripts = []
+        self.custom_scripts = []
 
         for x in os.listdir("./scripts"):
             if x.endswith(".sh"):
-                sh_scripts.append(x.split(".")[0])
+                self.sh_scripts.append(x.split(".")[0])
         
-        self.scripts = custom_scripts + sh_scripts
+        self.scripts = self.custom_scripts + self.sh_scripts
 
         self.view_quality = 0
         
@@ -22,8 +22,30 @@ class AppManager:
 
         self.selected_devices=[]
 
+        self.is_focused = False
+        self.focused_device = None
+
+        self.sync_control = False
+
+        self.mouse_click_count = 0
+        self.gen_script="#!/bin/sh\n"
+    
+    def toggle_sync_control(self):
+        self.sync_control = True if self.sync_control == False else False
+
+    def focus_device(self,serial):
+        if(self.focused_device == serial):
+            self.is_focused = False
+            self.focused_device=None
+        else:
+            self.focused_device = serial
+            self.is_focused = True
+
     def select_device(self,selected_devices):
         self.selected_devices = selected_devices
+
+    def reload_device_list(self):
+        self.serials_list = [d.serial for d in self.adb.device_list()]
         
     def set_quality(self,quality):
         self.view_quality = quality
